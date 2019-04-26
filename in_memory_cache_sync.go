@@ -1,5 +1,3 @@
-// +build !go1.9
-
 package dataloader
 
 import "sync"
@@ -9,54 +7,46 @@ import "sync"
 // a "per-request" dataloader (i.e. one that only lives
 // for the life of an http request) but it not well suited
 // for long lived cached items.
-type InMemoryCache struct {
-	items map[string]Thunk
-	mu    sync.RWMutex
+type InMemoryCacheSyncMap struct {
+	mu    sync.Mutex
+	items *sync.Map
 }
 
 // NewCache constructs a new InMemoryCache
-func NewCache() *InMemoryCache {
-	items := make(map[string]Thunk)
-	return &InMemoryCache{
-		items: items,
+func NewSyncMapCache() *InMemoryCacheSyncMap {
+	return &InMemoryCacheSyncMap{
+		items: &sync.Map{},
 	}
 }
 
 // Set sets the `value` at `key` in the cache
-func (c *InMemoryCache) Set(key string, value Thunk) {
-	c.mu.Lock()
-	c.items[key] = value
-	c.mu.Unlock()
+func (c *InMemoryCacheSyncMap) Set(key string, value Thunk) {
+	c.items.Store(key, value)
 }
 
 // Get gets the value at `key` if it exsits, returns value (or nil) and bool
 // indicating of value was found
-func (c *InMemoryCache) Get(key string) (Thunk, bool) {
-	c.mu.RLock()
-	defer c.mu.RUnlock()
-
-	item, found := c.items[key]
+func (c *InMemoryCacheSyncMap) Get(key string) (Thunk, bool) {
+	item, found := c.items.Load(key)
 	if !found {
 		return nil, false
 	}
 
-	return item, true
+	return item.(Thunk), true
 }
 
 // Delete deletes item at `key` from cache
-func (c *InMemoryCache) Delete(key string) bool {
-	if _, found := c.Get(key); found {
-		c.mu.Lock()
-		defer c.mu.Unlock()
-		delete(c.items, key)
+func (c *InMemoryCacheSyncMap) Delete(key string) bool {
+	if _, found := c.items.Load(key); found {
+		c.items.Delete(key)
 		return true
 	}
 	return false
 }
 
 // Clear clears the entire cache
-func (c *InMemoryCache) Clear() {
+func (c *InMemoryCacheSyncMap) Clear() {
 	c.mu.Lock()
-	c.items = map[string]Thunk{}
+	c.items = &sync.Map{}
 	c.mu.Unlock()
 }

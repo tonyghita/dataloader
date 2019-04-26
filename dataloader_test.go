@@ -4,7 +4,6 @@ import (
 	"context"
 	"errors"
 	"fmt"
-	"log"
 	"reflect"
 	"strconv"
 	"sync"
@@ -576,20 +575,29 @@ var a = &Avg{}
 func batchIdentity(_ context.Context, keys []string) (results []*Result) {
 	a.Add(len(keys))
 	for _, key := range keys {
-		results = append(results, &Result{key, nil})
+		results = append(results, &Result{Data: key})
 	}
 	return
 }
 
-var _ctx context.Context = context.Background()
+var _ctx = context.Background()
 
-func BenchmarkLoader(b *testing.B) {
-	UserLoader := NewBatchedLoader(batchIdentity)
+func BenchmarkSyncMapLoader(b *testing.B) {
+	loader := NewBatchedLoader(batchIdentity, WithCache(NewSyncMapCache()), WithBatchCapacity(100), WithClearCacheOnBatch())
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		UserLoader.Load(_ctx, strconv.Itoa(i))
+		loader.Load(_ctx, strconv.Itoa(i))
 	}
-	log.Printf("avg: %f", a.Avg())
+	// log.Printf("avg: %f", a.Avg())
+}
+
+func BenchmarkMapLoader(b *testing.B) {
+	loader := NewBatchedLoader(batchIdentity, WithCache(NewCache()), WithBatchCapacity(100), WithClearCacheOnBatch())
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		loader.Load(_ctx, strconv.Itoa(i))
+	}
+	// log.Printf("avg: %f", a.Avg())
 }
 
 type Avg struct {
